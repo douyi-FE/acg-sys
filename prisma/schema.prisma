@@ -1,0 +1,270 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ServiceKind {
+  COMFYUI
+  OPENAI
+  OLLAMA
+}
+
+model User {
+  id                  String @id @default(cuid())
+  username            String @unique @db.VarChar(100)
+  nickname            String? @db.VarChar(100)
+  email               String? @db.VarChar(254)
+  lastLoginAt         DateTime?
+  passwordHash        String @db.VarChar(255)
+  enabled             Boolean @default(true)
+  forceChangePassword Boolean @default(true)
+  tokenVersion        Int @default(0)
+  roleId              String
+  role                Role @relation(fields: [roleId], references: [id])
+  sessions            RefreshSession[]
+  tasks               Task[]
+  executions          Execution[]
+  assets              Asset[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Role {
+  id          String @id @default(cuid())
+  name        String @unique @db.VarChar(100)
+  description String @default("")
+  enabled     Boolean @default(true)
+  builtIn     Boolean @default(false)
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Permission {
+  id          String @id
+  description String
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@id([roleId, permissionId])
+}
+
+model RefreshSession {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String @unique @db.Char(64)
+  familyId  String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, familyId])
+}
+
+model AuditLog {
+  id        String @id @default(cuid())
+  userId    String?
+  action    String
+  targetId  String?
+  metadata  Json?
+  ip        String? @db.VarChar(45)
+  result    String @default("SUCCESS") @db.VarChar(32)
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
+model Task {
+  id             String @id @default(cuid())
+  userId         String
+  user           User @relation(fields: [userId], references: [id])
+  title          String
+  kind           String @default("video")
+  status         String @default("QUEUED")
+  progress       Float @default(0)
+  stageIndex     Int @default(0)
+  stages         Json
+  request        Json
+  metadata       Json?
+  modelId        String?
+  workflowId     String?
+  pipelineId     String?
+  pipeline       Pipeline? @relation(fields: [pipelineId], references: [id])
+  script         String @db.LongText
+  previousScript String @db.LongText
+  characters     Json
+  shots          Json
+  quality        Json?
+  logs           Json
+  cover          String @default("")
+  elapsed        Int @default(0)
+  estimated      Int @default(0)
+  retries        Int @default(0)
+  approved       Boolean @default(false)
+  error          String? @db.Text
+  isPublic       Boolean @default(false)
+  executions     Execution[]
+  assets         Asset[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([userId, createdAt])
+}
+
+model AIService {
+  id              String @id @default(cuid())
+  name            String
+  kind            ServiceKind
+  baseUrl         String
+  enabled         Boolean @default(true)
+  secretEncrypted String? @db.Text
+  health          Json?
+  metadata        Json?
+  models          AIModel[]
+  workflows       Workflow[]
+  executions      Execution[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AIModel {
+  id         String @id @default(cuid())
+  serviceId  String
+  service    AIService @relation(fields: [serviceId], references: [id])
+  remoteId   String
+  name       String
+  enabled    Boolean @default(true)
+  metadata   Json?
+  executions Execution[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([serviceId, remoteId])
+}
+
+model Workflow {
+  id              String @id @default(cuid())
+  name            String
+  description     String @db.Text
+  provider        String
+  type            String
+  instanceId      String?
+  instance        AIService? @relation(fields: [instanceId], references: [id])
+  status          String @default("DRAFT")
+  version         String @default("1")
+  workflowJson    Json?
+  apiWorkflowJson Json?
+  mapping         Json?
+  metadata        Json?
+  versions        WorkflowVersion[]
+  executions      Execution[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model WorkflowVersion {
+  id              String @id @default(cuid())
+  workflowId      String
+  workflow        Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  version         String
+  workflowJson    Json?
+  apiWorkflowJson Json?
+  mapping         Json?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  @@unique([workflowId, version])
+}
+
+model Execution {
+  id              String @id @default(cuid())
+  taskId          String
+  task            Task @relation(fields: [taskId], references: [id])
+  userId          String
+  user            User @relation(fields: [userId], references: [id])
+  provider        String
+  serviceId       String?
+  service         AIService? @relation(fields: [serviceId], references: [id])
+  workflowId      String?
+  workflow        Workflow? @relation(fields: [workflowId], references: [id])
+  workflowVersion String?
+  modelId         String?
+  model           AIModel? @relation(fields: [modelId], references: [id])
+  promptId        String?
+  status          String @default("QUEUED")
+  progress        Float? @default(0)
+  input           Json
+  output          Json?
+  error           Json?
+  metadata        Json?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  assets          Asset[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model Asset {
+  id          String @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id])
+  taskId      String?
+  task        Task? @relation(fields: [taskId], references: [id])
+  executionId String?
+  execution   Execution? @relation(fields: [executionId], references: [id])
+  name        String
+  type        String
+  mimeType    String?
+  storagePath String? @db.Text
+  metadata    Json
+  isPublic    Boolean @default(false)
+  createdAt   DateTime @default(now())
+  @@index([userId, createdAt])
+}
+
+model Pipeline {
+  id        String @id @default(cuid())
+  name      String
+  kind      String
+  version   String @default("1")
+  enabled   Boolean @default(true)
+  metadata  Json?
+  stages    Stage[]
+  tasks     Task[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Stage {
+  id          String @id @default(cuid())
+  pipelineId  String
+  pipeline    Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  key         String
+  name        String
+  position    Int @default(0)
+  workflowKind String
+  provider    String?
+  modelId     String?
+  workflowId  String?
+  metadata    Json?
+  qualityGate QualityGate?
+  @@unique([pipelineId, key])
+}
+
+model QualityGate {
+  id        String @id @default(cuid())
+  stageId   String @unique
+  stage     Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  threshold Float @default(80)
+  enabled   Boolean @default(true)
+  criteria  Json
+  metadata  Json?
+}

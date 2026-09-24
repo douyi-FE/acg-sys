@@ -1,0 +1,11 @@
+{
+  "extends": "./apps/server/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "emitDecoratorMetadata": false,
+    "verbatimModuleSyntax": false
+  },
+  "include": ["tests/server*.test.ts", "apps/server/src/**/*.ts", "prisma/seed.ts"],
+  "exclude": ["node_modules", "**/dist"]
+}

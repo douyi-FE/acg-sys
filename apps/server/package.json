@@ -1,0 +1,14 @@
+{
+  "name": "@acg/server",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json && node --env-file-if-exists=../../.env dist/main.js",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "db:generate": "prisma generate --schema ../../prisma/schema.prisma",
+    "db:push": "prisma db push --schema ../../prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema ../../prisma/schema.prisma",
+    "seed:admin": "tsx --env-file-if-exists=../../.env ../../prisma/seed.ts"
+  }
+}

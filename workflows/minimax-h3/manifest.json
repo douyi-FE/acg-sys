@@ -1,0 +1,18 @@
+{
+  "id": "minimax-h3-placeholder",
+  "status": "unconfigured",
+  "executable": false,
+  "description": "仅占位，不宣称存在 MiniMax H3 官方 ComfyUI 节点或可运行工作流。",
+  "format": "ComfyUI API JSON required; UI JSON is not supported",
+  "apiWorkflow": "video-v1.json",
+  "mappingModule": "mapping.ts",
+  "mapping": {},
+  "suggestedSemanticInputs": ["prompt", "seed", "width", "height", "duration", "firstFrame", "lastFrame"],
+  "setup": [
+    "确认真实模型名称、授权、Provider API 与已安装节点文档。",
+    "在目标 ComfyUI 实例中验证工作流并导出 API Format JSON。",
+    "将业务语义参数映射到该 API 图实际存在的 nodeId.inputs.inputName。",
+    "依据节点文档确认 duration 单位；Adapter 不猜测秒数与帧数换算。",
+    "使用 ComfyUIAdapter 校验、提交和轮询；未配置前只允许 Mock 模式。"
+  ]
+}
