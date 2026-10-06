@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { createSeed, createTask } from '../../src/services/seed'
+import { createDemoSeed, createSeed, createTask, createStages } from '../../src/services/seed'
 import { advanceTask } from '../../src/services/pipeline'
 
 test('manual review: pipeline reaches review, preview precedes enabled controls, approve and reject persist', async ({ page }) => {
@@ -20,6 +20,7 @@ test('manual review: pipeline reaches review, preview precedes enabled controls,
   const preview = page.getByTestId('task-review-preview')
   await expect(preview).toContainText('ACTUAL SAVED SCRIPT')
   await expect(approve).toBeEnabled()
+  await expect(page.getByTestId('task-delivery')).toHaveCount(0)
   expect(await page.evaluate(() => {
     const preview = document.querySelector('#review-preview')!
     return !!(preview.compareDocumentPosition(document.querySelector('[data-testid="manual-review"]')!) & Node.DOCUMENT_POSITION_FOLLOWING)
@@ -29,6 +30,14 @@ test('manual review: pipeline reaches review, preview precedes enabled controls,
   await approve.click()
   await expect(page.locator('#approve-reason')).toContainText('SUCCESS')
   await expect(approve).toBeDisabled()
+  const delivery = page.getByTestId('task-delivery')
+  await expect(delivery).toBeVisible()
+  const downloaded = page.waitForEvent('download')
+  await delivery.getByRole('button', { name: '下载制作资料（JSON）', exact: true }).click()
+  expect((await downloaded).suggestedFilename()).toBe(`${task.id}-deliverable.json`)
+  const videoDownload = page.waitForEvent('download')
+  await delivery.getByRole('button', { name: '下载 Mock 示例视频', exact: true }).click()
+  expect((await videoDownload).suggestedFilename()).toMatch(/\.mp4$/)
   await page.reload()
   await expect(page.locator('#approve-reason')).toContainText('SUCCESS')
   await page.evaluate(value => localStorage.setItem('acg-content-factory-db', value), JSON.stringify(db))
@@ -156,6 +165,135 @@ function videoTask() {
   return { db, task }
 }
 
+test('approved article offers copy and Markdown/HTML delivery without external publishing', async ({ page }) => {
+  const { db, task } = videoTask()
+  task.kind = 'article'
+  task.stages = createStages('article')
+  task.stageIndex = task.stages.length - 1
+  task.modelId = 'qwen-max'
+  task.workflowId = 'article-text'
+  task.status = 'SUCCESS'
+  task.approved = true
+  task.progress = 100
+  db.tasks = [task]
+  db.articles = [{
+    id: 'delivery-article', taskId: task.id, topicId: db.topics[0]!.id,
+    title: '交付文章', body: '## 正文\n\n**审核内容**', outline: '', platform: '测试平台',
+    status: 'approved', updatedAt: task.updatedAt,
+    safety: [{ name: '来源', status: '通过', reason: '人工核查' }],
+  }]
+  await page.addInitScript(value => {
+    localStorage.setItem('acg-content-factory-db', value)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: async (text: string) => { sessionStorage.setItem('copied-text', text) } },
+    })
+  }, JSON.stringify(db))
+  await page.goto(`/tasks/${task.id}?devMode=demo`)
+  const delivery = page.getByTestId('task-delivery')
+  await expect(delivery).toBeVisible()
+  await delivery.getByRole('button', { name: '复制正文', exact: true }).click()
+  expect(await page.evaluate(() => sessionStorage.getItem('copied-text'))).toBe(db.articles[0]!.body)
+  for (const [label, extension] of [['下载 Markdown', 'md'], ['下载 HTML', 'html']]) {
+    const download = page.waitForEvent('download')
+    await delivery.getByRole('button', { name: label, exact: true }).click()
+    expect((await download).suggestedFilename()).toBe(`delivery-article.${extension}`)
+  }
+  await expect(delivery.getByRole('button', { name: '下载 Mock 示例视频' })).toHaveCount(0)
+})
+
+test('task list opens inline review and delivery actions', async ({ page }) => {
+  const { db, task } = videoTask()
+  task.characters = [{
+    id: 'review-character', name: '角色', age: 30, gender: '未设定', identity: '虚构角色',
+    appearance: '测试外观', outfit: '测试服装', expression: '自然', pose: '站立',
+  }]
+  task.shots = [{
+    id: 'review-shot', start: 0, end: 30, description: '测试分镜', character: '角色',
+    camera: '固定', action: '动作', emotion: '自然', sound: '环境音',
+    firstPrompt: '首帧', lastPrompt: '尾帧', bridge: '连续', continuity: '一致',
+  }]
+  db.tasks = [task]
+  await page.addInitScript(value => localStorage.setItem('acg-content-factory-db', value), JSON.stringify(db))
+  await page.goto('/tasks?devMode=demo')
+  const row = page.locator('.task-row').first()
+  await expect(row).toContainText('Review video')
+  await row.getByRole('button', { name: '预览' }).click()
+  const modal = page.getByRole('dialog')
+  await expect(modal.getByTestId('mock-video-preview')).toBeVisible()
+  await expect(modal.getByTestId('task-review-preview')).not.toContainText('ACTUAL SAVED SCRIPT')
+  await expect(modal.locator('.storyboard-grid')).toHaveCount(0)
+  await expect(modal.getByTestId('task-delivery')).toHaveCount(0)
+  const videoScroll = await page.evaluate(() => ({
+    documentScroll: getComputedStyle(document.body).overflow !== 'hidden',
+    wrapScroll: getComputedStyle(document.querySelector('.video-preview-modal')!).overflowY,
+    bodyScroll: document.querySelector('.video-preview-modal .ant-modal-body')!.scrollHeight
+      > document.querySelector('.video-preview-modal .ant-modal-body')!.clientHeight,
+  }))
+  expect(videoScroll.documentScroll).toBe(false)
+  expect(videoScroll.wrapScroll).toBe('hidden')
+  expect(videoScroll.bodyScroll).toBe(false)
+  await expect(modal.getByTestId('list-review-actions')).toHaveCount(0)
+  await modal.getByRole('button', { name: 'Close', exact: true }).click()
+  await row.getByRole('button', { name: '人工审批' }).click()
+  await expect(page.getByRole('dialog').getByTestId('list-review-actions')).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: '人工通过', exact: true }).click()
+  await expect(page.locator('.task-row')).toContainText('已完成')
+  await expect(page.getByRole('dialog').getByTestId('task-delivery')).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click()
+  await row.getByRole('button', { name: '下载', exact: true }).click()
+  await expect(modal.getByTestId('video-review-preview')).toHaveCount(0)
+  const download = page.waitForEvent('download')
+  await modal.getByRole('button', { name: '下载制作资料（JSON）', exact: true }).click()
+  expect((await download).suggestedFilename()).toBe(`${task.id}-deliverable.json`)
+})
+
+test('demo article review previews generated illustration, approves, copies and downloads', async ({ page }) => {
+  const db = createDemoSeed(createSeed())
+  db.tasks = db.tasks.filter((task) => task.kind === 'article')
+  db.tasks[0]!.createdAt = db.tasks[0]!.updatedAt = new Date().toISOString()
+  await page.addInitScript((value) => {
+    localStorage.setItem('acg-content-factory-db', value)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: async (text: string) => sessionStorage.setItem('copied-text', text) },
+    })
+  }, JSON.stringify(db))
+  await page.goto('/tasks?devMode=demo')
+
+  const row = page.locator('.task-row').first()
+  await expect(row).toContainText('图文示例')
+  await row.getByRole('button', { name: '预览', exact: true }).click()
+  const modal = page.getByRole('dialog')
+  await expect(modal.getByTestId('article-full-body')).toContainText('从选题到交付')
+  await expect(modal.locator('.article-illustration img')).toHaveAttribute(
+    'src',
+    '/mock-assets/mock-article-fact-check-v1.png',
+  )
+  const articleScroll = await page.evaluate(() => ({
+    documentScroll: getComputedStyle(document.body).overflow !== 'hidden',
+    bodyScroll: document.querySelector('.article-preview-modal .ant-modal-body')!.scrollHeight
+      > document.querySelector('.article-preview-modal .ant-modal-body')!.clientHeight,
+  }))
+  expect(articleScroll.documentScroll).toBe(false)
+  expect(articleScroll.bodyScroll).toBe(true)
+  await expect(modal.getByTestId('task-delivery')).toHaveCount(0)
+  await modal.getByRole('button', { name: 'Close', exact: true }).click()
+
+  await row.getByRole('button', { name: '人工审批', exact: true }).click()
+  const reviewModal = page.getByRole('dialog')
+  await expect(reviewModal.getByTestId('list-review-actions')).toBeVisible()
+  await reviewModal.getByRole('button', { name: '人工通过', exact: true }).click()
+  await expect(row).toContainText('已完成')
+  await expect(reviewModal.getByTestId('task-delivery')).toBeVisible()
+
+  await reviewModal.getByRole('button', { name: '复制正文', exact: true }).click()
+  expect(await page.evaluate(() => sessionStorage.getItem('copied-text'))).toContain('从选题到交付')
+  for (const [label, extension] of [['下载 Markdown', 'md'], ['下载 HTML', 'html'], ['下载制作资料（JSON）', 'json']]) {
+    const download = page.waitForEvent('download')
+    await reviewModal.getByRole('button', { name: label, exact: true }).click()
+    expect((await download).suggestedFilename()).toMatch(new RegExp(`\\.${extension}$`))
+  }
+})
+
 test('demo manual review honestly has no playable MP4', async ({ page }) => {
   const { db, task } = videoTask()
   db.tasks = [task]
@@ -165,9 +303,21 @@ test('demo manual review honestly has no playable MP4', async ({ page }) => {
   )
   await page.goto(`/tasks/${task.id}?devMode=demo`)
   const preview = page.getByTestId('task-review-preview')
-  await expect(preview).toContainText('暂无可播放的实际视频产物')
+  await expect(preview).toContainText('用户提供的 Mock 示例视频')
   await expect(preview).toContainText('ACTUAL SAVED SCRIPT')
-  await expect(preview.locator('video')).toHaveCount(0)
+  await expect(preview.getByTestId('mock-video-preview').locator('video')).toHaveAttribute(
+    'src',
+    '/mock-assets/f2f33158052b4d898f47826dcd166892.mp4',
+  )
+  const mockVideo = preview.getByTestId('mock-video-preview').locator('video')
+  await expect.poll(() => mockVideo.evaluate((element) => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
+  const videoShape = await mockVideo.evaluate((element) => {
+    const video = element as HTMLVideoElement
+    const box = video.getBoundingClientRect()
+    return { sourceRatio: video.videoWidth / video.videoHeight, boxRatio: box.width / box.height }
+  })
+  expect(videoShape.sourceRatio).toBeGreaterThan(0)
+  expect(Math.abs(videoShape.sourceRatio - videoShape.boxRatio)).toBeLessThan(0.02)
   const pipeline = page.getByTestId('production-pipeline')
   await expect(pipeline.locator('.ant-progress')).toBeVisible()
   await expect(pipeline.getByRole('navigation', { name: '生产阶段' }).locator('button')).toHaveCount(

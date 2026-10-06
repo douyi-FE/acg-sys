@@ -34,7 +34,7 @@ npm run server:seed-admin
 npm run dev
 ```
 
-前端由 Vite 提供，`/api` 代理到本机 NestJS 3000。浏览器不能将 AI Base URL 作为请求地址；真实请求只能经过后端。
+开发环境前端由 Vite 提供，默认监听 8060，`/api` 代理到本机 NestJS 8061；可分别使用 `DEV_WEB_PORT` 与 `DEV_BACKEND_PORT` 配置。生产环境应用入口默认使用 8060，NestJS 后端端口由 `PORT` 配置。浏览器不能将 AI Base URL 作为请求地址；真实请求只能经过后端。
 
 `npm install` 在已有 pnpm 链接布局上可能发生 npm 依赖树错误；不要因此删除用户源代码。优先在当前仓库继续使用 pnpm 安装，`npm run` 可以运行项目脚本。
 
@@ -85,9 +85,9 @@ docker compose run --rm backend npm run server:seed-admin
 docker compose up -d
 ```
 
-Compose 不映射 MySQL 与后端端口到主机，只将应用入口绑定到 `127.0.0.1:8088`。AI 服务运行在宿主机时，容器内的 `127.0.0.1` 是容器自身，使用 `host.docker.internal` 并将对应端口加入允许列表。根据 Docker Desktop/操作系统设置确认宿主机服务允许容器网络访问，但不要因此对公网开放 AI 端口。
+Compose 不映射 MySQL 与后端端口到主机，只将应用入口默认绑定到 `127.0.0.1:8060`，可通过 `PROD_PORT` 配置。AI 服务运行在宿主机时，容器内的 `127.0.0.1` 是容器自身，使用 `host.docker.internal` 并将对应端口加入允许列表。根据 Docker Desktop/操作系统设置确认宿主机服务允许容器网络访问，但不要因此对公网开放 AI 端口。
 
-Compose 包含 mysql、backend、frontend、proxy 四个服务。`deploy/Caddyfile` 是仅监听本机映射端口的 HTTP 内层代理，不是公网 HTTPS 配置。本机 HTTP 验收可设 `COOKIE_SECURE=false` 和 `ALLOWED_ORIGINS=http://127.0.0.1:8088`；远程部署必须改为 `COOKIE_SECURE=true`、真实 HTTPS Origin，并在外层使用 `deploy/Caddyfile.example` 配置域名与证书。
+Compose 包含 mysql、backend、frontend、proxy 四个服务。`deploy/Caddyfile` 是仅监听本机映射端口的 HTTP 内层代理，不是公网 HTTPS 配置。本机 HTTP 验收可设 `COOKIE_SECURE=false` 和 `ALLOWED_ORIGINS=http://127.0.0.1:8060`；远程部署必须改为 `COOKIE_SECURE=true`、真实 HTTPS Origin，并在外层使用 `deploy/Caddyfile.example` 配置域名与证书。
 
 MySQL 密码用于 Compose 连接串时应避免未编码的 URL 保留字符。`mysql-data` 与 `asset-data` 是持久化卷；备份时同时备份数据库和资产目录。不要用 `docker compose down -v` 作为日常重启方式。
 
@@ -102,7 +102,7 @@ HTTPS / VPN / Tunnel
   -> 内网 MySQL / ComfyUI / LLM
 ```
 
-`deploy/Caddyfile.example` 只是部署模板，必须配置真实域名、DNS 与证书。公网入口只能是应用反向代理，不直接开放 3000、5173、3306、8188 或 LLM 端口。
+`deploy/Caddyfile.example` 只是部署模板，必须配置真实域名、DNS 与证书。公网入口只能是应用反向代理，不直接开放应用后端、3306、8188 或 LLM 端口。
 
 上线前检查 Secure Cookie、精确 Origin、反向代理信任范围、限流、角色权限与公开资源范围；执行一次未登录、游客、普通用户和管理员权限验收。不要将 Mock 构建作为真实部署。
 

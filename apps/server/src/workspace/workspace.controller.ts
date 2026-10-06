@@ -77,9 +77,18 @@ export class HealthController {
   @Public() @Get()
   async health(@Res({ passthrough: true }) res: Response) {
     const ready = await this.db.check()
-    res.status(ready ? 200 : 503)
-    return { status: ready ? 'ready' : 'unavailable', backend: 'up', database: ready ? 'up' : 'down',
-      dependencies: { comfyui: 'not_checked', llm: 'not_checked' } }
+    const configError = !process.env.JWT_ACCESS_SECRET || process.env.JWT_ACCESS_SECRET.length < 32
+      ? { code: 'JWT_ACCESS_SECRET_INVALID', message: '服务端未正确配置 JWT_ACCESS_SECRET，至少需要 32 个字符。' }
+      : undefined
+    const available = ready && !configError
+    res.status(available ? 200 : 503)
+    return {
+      status: available ? 'ready' : 'unavailable',
+      backend: 'up',
+      database: ready ? 'up' : 'down',
+      reason: configError ?? this.db.lastError,
+      dependencies: { comfyui: 'not_checked', llm: 'not_checked' },
+    }
   }
   @Public() @Get('live')
   live() { return { status: 'alive', backend: 'up' } }

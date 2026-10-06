@@ -10,6 +10,8 @@ export function isDatabaseUnavailable(error: unknown) {
 @Injectable()
 export class DatabaseService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   ready = false
+  configured = Boolean(process.env.DATABASE_URL)
+  lastError?: { code: string; message: string }
   private stopped = false
   private timer?: NodeJS.Timeout
   private pending?: Promise<boolean>
@@ -34,11 +36,25 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
     if (this.pending) return this.pending
     this.pending = (async () => {
       try {
+        if (!this.configured) {
+          this.ready = false
+          this.lastError = {
+            code: 'DATABASE_URL_MISSING',
+            message: '服务端未配置 DATABASE_URL，请在服务端 .env 中配置 MySQL 连接地址后重启。',
+          }
+          return false
+        }
         await this.$queryRaw`SELECT 1`
         this.ready = !this.stopped
-      } catch {
+        this.lastError = undefined
+      } catch (error) {
         if (this.ready) this.logger.warn('Database unavailable; requests will return 503')
         this.ready = false
+        const value = error as { code?: string; message?: string }
+        this.lastError = {
+          code: value.code ?? 'DATABASE_CONNECTION_FAILED',
+          message: '数据库连接失败，请检查 DATABASE_URL、MySQL 状态、账号权限和网络连通性。',
+        }
       }
       return this.ready
     })().finally(() => {

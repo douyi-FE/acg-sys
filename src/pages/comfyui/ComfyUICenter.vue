@@ -116,7 +116,7 @@ async function runNext() {
 </script>
 
 <template>
-  <div class="page-stack">
+  <div class="page-stack comfy-center">
     <PageHeader
       title="ComfyUI引擎"
       description="统一查看实例、执行队列与工作流注册表。GPU / VRAM 不可用时会明确标记，不展示猜测值。"
@@ -140,7 +140,7 @@ async function runNext() {
       :message="notice"
     />
     <section class="panel submission">
-      <h2>提交执行</h2>
+      <div class="section-heading"><span class="section-kicker">REAL EXECUTION</span><h2>提交执行</h2><p class="muted">选择实例、工作流和任务，提交一次真实 ComfyUI 执行。</p></div>
       <p class="muted">
         需先配置实例并通过真实探测；任务当前阶段须绑定 ComfyUI，工作流需有活动 API
         快照。所有校验错误原样显示，不创建假执行。
@@ -235,7 +235,11 @@ async function runNext() {
         @click="submit"
         >提交并执行</a-button
       >
-      <router-link to="/engine">配置实例 / 真实探测</router-link>
+      <router-link class="engine-action-link" to="/engine">
+        <span class="engine-action-icon">⚙</span>
+        <span><strong>配置实例</strong><small>连接测试与健康检查</small></span>
+        <span class="engine-action-arrow">→</span>
+      </router-link>
     </section>
     <div class="tabs">
       <button
@@ -248,7 +252,7 @@ async function runNext() {
         @click="tab = 'registry'"
       >
         工作流注册表</button
-      ><router-link to="/engine">实例与健康</router-link>
+      ><router-link class="engine-tab-link" to="/engine">实例与健康 <span>→</span></router-link>
     </div>
     <section
       v-if="tab === 'queue'"
@@ -377,6 +381,13 @@ async function runNext() {
 </template>
 
 <style scoped>
+.comfy-center > .ant-alert { border-radius:12px; }
+.section-heading { margin-bottom: 8px; }.section-heading h2 { margin: 6px 0 4px; color:#29263f; }.section-heading p { margin:0; font-size:12px; }.section-kicker { color:#7770d8; font-size:10px; font-weight:750; letter-spacing:.16em; }
+.engine-action-link { display:flex; align-items:center; gap:12px; width:fit-content; margin-top:4px; padding:12px 14px; border:1px solid #dedaf3; border-radius:10px; background:#faf9ff; color:#5148c7; text-decoration:none; transition:border-color .2s, background .2s, transform .2s; }
+.engine-action-link:hover { border-color:#aaa2e8; background:#f3f1ff; transform:translateY(-1px); }
+.engine-action-icon { display:grid; place-items:center; width:28px; height:28px; border-radius:8px; background:#e9e6ff; color:#635bdb; font-size:15px; }
+.engine-action-link strong, .engine-action-link small { display:block; }.engine-action-link strong { font-size:13px; }.engine-action-link small { margin-top:3px; color:#87839f; font-size:11px; }.engine-action-arrow { margin-left:10px; font-size:18px; }
+.engine-tab-link { display:inline-flex; align-items:center; gap:6px; padding:10px 12px; border:1px solid #dedaf3; border-radius:8px; background:#faf9ff; color:#635bdb !important; text-decoration:none; }.engine-tab-link:hover { border-color:#aaa2e8; background:#f3f1ff; }.engine-tab-link span { font-size:16px; }
 .submission {
   display: grid;
   gap: 14px;
@@ -430,10 +441,14 @@ async function runNext() {
   border: 1px solid #eeeef4;
   border-radius: 10px;
   cursor: pointer;
+  background: linear-gradient(135deg,#fff,#fbfaff);
+  transition: transform .2s, border-color .2s, box-shadow .2s;
 }
 .execution-card:hover {
+  transform: translateY(-2px);
   border-color: #c9c5f3;
   background: #fcfcff;
+  box-shadow: 0 10px 24px rgba(74,63,145,.08);
 }
 .execution-main {
   min-width: 0;
@@ -494,6 +509,7 @@ async function runNext() {
   align-items: center;
   padding: 18px 0;
   border-top: 1px solid #eeeef4;
+  padding: 20px 0;
 }
 .registry-row > div:first-child {
   display: flex;

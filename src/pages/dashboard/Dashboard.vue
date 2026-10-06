@@ -22,7 +22,7 @@ async function loadDemo() {
   demoLoading.value = true
   try {
     await store.loadDemo()
-    message.success('示例生产任务已加入队列，不会覆盖已有内容')
+    message.success('视频示例与图文人工审核示例已加入，不会覆盖已有内容')
   } catch (cause) {
     message.error(cause instanceof Error ? cause.message : '示例加载失败')
   } finally {

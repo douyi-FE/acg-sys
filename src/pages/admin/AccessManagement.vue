@@ -30,6 +30,17 @@ const page = ref(1)
 const total = ref(0)
 type List<T> = T[] | { items: T[]; total: number }
 const items = <T,>(value: List<T>) => Array.isArray(value) ? value : value.items
+const roleName = (roleId: string) => roles.value.find(role => role.id === roleId)?.name || '未分配角色'
+const userStats = computed(() => ({
+  total: total.value,
+  enabled: users.value.filter(user => user.enabled).length,
+  pending: users.value.filter(user => user.forceChangePassword).length,
+}))
+const roleStats = computed(() => ({
+  total: roles.value.length,
+  enabled: roles.value.filter(role => role.enabled).length,
+  permissions: new Set(roles.value.flatMap(role => role.permissions ?? []).map(permission => 'permissionId' in permission ? permission.permissionId : permission.id)).size,
+}))
 async function load() {
   busy.value = true; error.value = ''
   try {
@@ -75,24 +86,68 @@ async function remove(rowId: string) {
 watch(kind, () => { page.value = 1; open.value = false; void load() }, { immediate: true })
 </script>
 <template>
-  <div class="page-stack">
+  <div class="page-stack" :class="{ 'users-page': kind === 'users' }">
     <PageHeader :title="title || '权限管理'" :description="isMockMode ? 'Mock 本地管理示例；刷新重置，不创建真实账号或权限。请勿输入真实密码。' : '数据与授权来自后端；权限变更后重新读取当前会话。'" />
     <a-alert v-if="error" type="error" :message="error" />
-    <section class="panel toolbar">
+    <section v-if="kind === 'users'" class="user-stats">
+      <article class="stat-card"><span>用户总数</span><strong>{{ userStats.total }}</strong><small>当前工作空间</small></article>
+      <article class="stat-card"><span>已启用</span><strong>{{ userStats.enabled }}</strong><small>可正常登录</small></article>
+      <article class="stat-card"><span>待改密</span><strong>{{ userStats.pending }}</strong><small>首次登录需修改</small></article>
+    </section>
+    <section v-if="kind === 'roles'" class="user-stats role-stats">
+      <article class="stat-card"><span>角色总数</span><strong>{{ roleStats.total }}</strong><small>当前工作空间</small></article>
+      <article class="stat-card"><span>已启用</span><strong>{{ roleStats.enabled }}</strong><small>可被分配</small></article>
+      <article class="stat-card"><span>已使用权限</span><strong>{{ roleStats.permissions }}</strong><small>去重后权限项</small></article>
+    </section>
+    <section class="panel toolbar management-toolbar">
+      <div class="toolbar-title">
+        <span class="toolbar-kicker">{{ kind === 'users' ? 'TEAM DIRECTORY' : kind === 'roles' ? 'ACCESS CONTROL' : 'AUDIT TRAIL' }}</span>
+        <strong>{{ kind === 'users' ? '团队成员' : kind === 'roles' ? '权限角色' : '操作记录' }}</strong>
+      </div>
       <a-input v-model:value="search" aria-label="搜索管理记录" placeholder="搜索" @press-enter="page = 1; load()" />
       <a-button :loading="busy" @click="load">刷新</a-button>
-      <a-button v-if="kind !== 'audit-logs' && auth.can(`${kind}.create`)" @click="edit()">新增</a-button>
+      <a-button v-if="kind !== 'audit-logs' && auth.can(`${kind}.create`)" type="primary" @click="edit()">{{ kind === 'users' ? '添加成员' : '新增' }}</a-button>
     </section>
-    <div class="admin-cards">
+    <div class="admin-cards" :class="{ 'user-cards': kind === 'users', 'role-cards': kind === 'roles' }">
       <article v-for="row in kind === 'users' ? users : kind === 'roles' ? roles : audits" :key="row.id" class="panel">
-        <h3>{{ 'username' in row ? row.username : 'name' in row ? row.name : row.action }}</h3>
-        <p class="muted">{{ row.id }}</p>
-        <template v-if="'action' in row"><p>{{ row.createdAt }}</p><p>操作者：{{ row.userId || '未关联' }}</p></template>
-        <template v-else>
-          <p>{{ row.enabled ? '启用' : '停用' }}</p>
-          <a-button v-if="auth.can(`${kind}.update`)" @click="edit(row)">编辑</a-button>
-          <a-popconfirm title="确定删除？后端将校验关联约束。" @confirm="remove(row.id)"><a-button v-if="auth.can(`${kind}.delete`)" danger>删除</a-button></a-popconfirm>
+        <template v-if="'username' in row">
+          <div class="user-card-head">
+            <div class="avatar">{{ (row.displayName || row.username).slice(0, 1).toUpperCase() }}</div>
+            <div><h3>{{ row.displayName || row.username }}</h3><p class="username">@{{ row.username }}</p></div>
+            <span class="status-pill" :class="row.enabled ? 'is-enabled' : 'is-disabled'">{{ row.enabled ? '已启用' : '已停用' }}</span>
+          </div>
+          <div class="user-card-meta">
+            <span><small>角色</small><b>{{ roleName(row.roleId) }}</b></span>
+            <span><small>账户状态</small><b>{{ row.forceChangePassword ? '待完成首次改密' : '密码已设置' }}</b></span>
+          </div>
+          <p class="muted user-id">{{ row.id }}</p>
         </template>
+        <template v-else>
+          <template v-if="'name' in row">
+            <div class="role-card-head">
+              <div class="role-icon">◆</div>
+              <div><h3>{{ row.name }}</h3><p class="muted">{{ row.description || '暂无角色说明' }}</p></div>
+              <span class="status-pill" :class="row.enabled ? 'is-enabled' : 'is-disabled'">{{ row.enabled ? '已启用' : '已停用' }}</span>
+            </div>
+            <p class="muted role-id">{{ row.id }}</p>
+          </template>
+          <template v-else>
+            <h3>{{ row.action }}</h3>
+            <p class="muted">{{ row.id }}</p>
+          </template>
+        </template>
+        <template v-if="'action' in row"><p>{{ row.createdAt }}</p><p>操作者：{{ row.userId || '未关联' }}</p></template>
+        <template v-else-if="'name' in row">
+          <p>{{ row.enabled ? '启用' : '停用' }}</p>
+          <div class="role-actions">
+            <a-button v-if="auth.can(`${kind}.update`)" @click="edit(row)">编辑角色</a-button>
+            <a-popconfirm title="确定删除？后端将校验关联约束。" @confirm="remove(row.id)"><a-button v-if="auth.can(`${kind}.delete`)" danger>删除角色</a-button></a-popconfirm>
+          </div>
+        </template>
+        <div v-else class="card-actions">
+          <a-button v-if="auth.can(`${kind}.update`)" type="text" @click="edit(row)">编辑成员</a-button>
+          <a-popconfirm title="确定删除该成员？后端将校验关联约束。" @confirm="remove(row.id)"><a-button v-if="auth.can(`${kind}.delete`)" type="text" danger>删除成员</a-button></a-popconfirm>
+        </div>
       </article>
     </div>
     <div v-if="kind !== 'roles'" class="toolbar"><a-button :disabled="page <= 1" @click="page--; load()">上一页</a-button><span>第 {{ page }} 页 / 共 {{ total }} 条</span><a-button :disabled="page * 20 >= total" @click="page++; load()">下一页</a-button></div>
@@ -118,8 +173,37 @@ watch(kind, () => { page.value = 1; open.value = false; void load() }, { immedia
 </template>
 <style scoped>
 .admin-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr)); gap:16px; }
+.user-cards { grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); }
 .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.management-toolbar { padding: 18px 20px; border: 1px solid #e5e2f0; }
+.toolbar-title { display: grid; gap: 5px; flex: 1; min-width: 180px; }
+.toolbar-kicker { color: #7770d8; font-size: 10px; font-weight: 750; letter-spacing: .16em; }
+.toolbar-title strong { color: #29263f; font-size: 18px; }
 .toolbar .ant-input { max-width:320px; }
 .editor, label { display:grid; gap:12px; }
 .editor { gap:24px; } p { overflow-wrap:anywhere; }
+.user-stats { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; }
+.stat-card { padding:20px 22px; border:1px solid #e5e2f0; border-radius:14px; background:linear-gradient(135deg,#fff,#faf9ff); }
+.stat-card span, .stat-card small { display:block; color:#89869b; font-size:12px; }
+.stat-card strong { display:block; margin:7px 0 4px; color:#635bdb; font-size:30px; letter-spacing:-.04em; }
+.user-cards > article { padding:22px; border:1px solid #e5e2f0; transition:transform .2s, box-shadow .2s, border-color .2s; }
+.user-cards > article:hover { transform:translateY(-2px); border-color:#c9c3f0; box-shadow:0 12px 28px rgba(74,63,145,.09); }
+.role-cards > article { padding:22px; border:1px solid #e5e2f0; }
+.role-cards > article:hover { border-color:#c9c3f0; box-shadow:0 12px 28px rgba(74,63,145,.08); }
+.role-card-head { display:flex; align-items:flex-start; gap:12px; min-width:0; }
+.role-card-head > div:nth-child(2) { min-width:0; flex:1; }.role-card-head h3 { margin:0 0 5px; color:#29263f; }.role-card-head p { margin:0; font-size:12px; line-height:1.6; }
+.role-icon { display:grid; flex:none; place-items:center; width:40px; height:40px; border-radius:12px; color:#635bdb; background:#f0eeff; }
+.role-id { margin:20px 0 0; padding-top:14px; border-top:1px solid #efedf5; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10px; }
+.role-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:18px; padding-top:14px; border-top:1px solid #efedf5; }
+.user-card-head { display:flex; align-items:center; gap:13px; min-width:0; }
+.user-card-head h3 { margin:0 0 4px; color:#28253d; }
+.avatar { display:grid; flex:none; place-items:center; width:44px; height:44px; border-radius:13px; color:#fff; background:linear-gradient(135deg,#7568f4,#9b72db); font-size:18px; font-weight:700; }
+.username { margin:0; color:#918da4; font-size:12px; }
+.status-pill { margin-left:auto; padding:5px 9px; border-radius:999px; font-size:11px; white-space:nowrap; }
+.is-enabled { color:#16734d; background:#e7f7ee; }.is-disabled { color:#9b4c4c; background:#fcecec; }
+.user-card-meta { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:22px 0 16px; padding:14px 0; border-top:1px solid #efedf5; border-bottom:1px solid #efedf5; }
+.user-card-meta span { display:grid; gap:5px; min-width:0; }.user-card-meta small { color:#9692a7; font-size:11px; }.user-card-meta b { overflow:hidden; color:#4d4a61; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+.user-id { margin:0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10px; }
+.card-actions { display:flex; gap:4px; margin-top:16px; padding-top:12px; border-top:1px solid #efedf5; }
+@media (max-width: 600px) { .user-stats { gap:8px; }.stat-card { padding:14px 12px; }.stat-card strong { font-size:24px; }.user-card-meta { grid-template-columns:1fr; }.management-toolbar { align-items:stretch; }.management-toolbar .ant-input { max-width:none; flex:1 1 100%; } }
 </style>

@@ -1,7 +1,7 @@
 # Deployment example only; provide your domain and configure DNS/tunnel/VPN separately.
 your-domain.example {
   encode zstd gzip
-  reverse_proxy 127.0.0.1:8088 {
+  reverse_proxy 127.0.0.1:8060 {
     flush_interval -1
   }
 }

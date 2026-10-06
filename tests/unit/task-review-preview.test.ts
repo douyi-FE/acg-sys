@@ -52,6 +52,7 @@ describe('saved review material', () => {
     const app = createSSRApp(TaskReviewPreview, { task, dirty: true })
     app.use(pinia)
     app.component('RouterLink', { template: '<span><slot /></span>' })
+    app.component('AButton', { template: '<button><slot /></button>' })
     const html = await renderToString(app)
     expect(html).toContain('class="panel review-preview"')
     expect(html).toContain('aria-labelledby="review-heading"')

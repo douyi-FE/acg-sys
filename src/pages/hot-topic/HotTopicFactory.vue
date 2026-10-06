@@ -135,10 +135,10 @@ async function create() {
     <a-alert
       v-if="!isMockMode"
       type="warning"
-      message="真实热点文章暂不可用"
-      description="后端尚未提供热点分析与文章存储接口。此处不会生成模拟文章或发送无效请求；真实文本生成请使用“真实内容创作”的 LLM 入口。"
+      message="真实热点监控尚未配置"
+      description="当前没有真实热点平台来源、采集接口或定时任务，因此不会展示本地 Mock 热点，也不会把空列表伪装成实时数据。请先完成热点平台接入后再选择热点。"
     />
-    <router-link v-if="!isMockMode" to="/video/new">前往真实内容创作（LLM 文本生成，不是热点文章存储）</router-link>
+    <router-link v-if="!isMockMode" to="/ai-services">前往 AI 服务配置</router-link>
     <a-alert
       v-if="error || store.error"
       type="error"
@@ -184,7 +184,7 @@ async function create() {
         v-if="!topics.length"
         class="empty-state"
       >
-        {{ isMockMode ? '暂无匹配热点。清空搜索或加载演示数据，再选择热点创建文章。' : '暂无真实热点数据；热点分析与文章存储接口尚未开放。' }}
+        {{ isMockMode ? '暂无匹配热点。清空搜索或加载演示数据，再选择热点创建文章。' : '暂无真实热点数据：当前热点监控平台尚未配置或后端接口尚未开放。' }}
         <a-button v-if="isMockMode" @click="query = ''; source = ''">清空筛选</a-button>
         <a-button v-if="isMockMode && !store.db.topics.length" @click="store.loadDemo()">加载演示热点</a-button>
       </div>

@@ -25,13 +25,17 @@ pnpm dev
 ```sh
 npm run dev:demo                 # 默认模式的显式别名
 npm run dev:real                 # 真实后端，必须登录；服务错误不会伪装为成功
+npm run dev:server               # 与 dev:real 相同：一次启动前端 8060 + 后端 8061
+npm run dev:backend              # 仅启动 NestJS 后端，不提供前端页面
 API_PROXY_TARGET=http://127.0.0.1:3301 npm run dev:real  # 使用外部后端
 DEV_WEB_PORT=0 npm run dev       # 由操作系统分配可用端口，终端显示精确 URL
 ```
 
 开发页面顶部的黄色横幅会明确显示 DEMO / REAL。REAL 模式连接失败时只显示离线错误；可以点击“选择 Mock 演示”主动切换，切换会整页重载并隔离本地演示状态。`.env` 中已有 `VITE_API_MODE=real` 不会阻止默认 `npm run dev` 进入 DEVELOPMENT DEMO；启动器通过 dev-only 模式选择解释并覆盖它。不要将真实密码或密钥输入 Mock 表单。
 
-默认 DEMO 不启动后端；页面切换 REAL 只改变前端模式，不会启动服务器。需要本地后端时运行 `npm run dev:real`；传入 `API_PROXY_TARGET` 时使用外部服务而不启动/停止它。未设置外部代理时，后端端口由 `DEV_BACKEND_PORT` 控制（默认 3000，显式覆盖本地配置中的 PORT）。页面选择仅在当前标签页的 sessionStorage 保留，生产忽略该值。Mock 工作区使用原有独立 localStorage 数据，真实工作区仅来自后端；切换时不复制任何数据。Mock 管理示例是临时内存数据，刷新重置。
+默认 DEMO 不启动后端；页面切换 REAL 只改变前端模式，不会启动服务器。需要本地前后端时运行 `npm run dev:real` 或 `npm run dev:server`；传入 `API_PROXY_TARGET` 时使用外部服务而不启动/停止它。开发环境前端端口由 `DEV_WEB_PORT` 控制（默认 8060），后端端口由 `DEV_BACKEND_PORT` 控制（默认 8061），两者可独立配置；访问 `http://127.0.0.1:8060/` 前必须使用双进程启动命令，不能只运行 `npm run dev:backend`。生产环境入口默认 8060，Nest 后端端口由 `PORT` 控制（默认 8060）。页面选择仅在当前标签页的 sessionStorage 保留，生产忽略该值。Mock 工作区使用原有独立 localStorage 数据，真实工作区仅来自后端；切换时不复制任何数据。Mock 管理示例是临时内存数据，刷新重置。
+
+视频任务的 Mock 审核预览使用项目内固定资源 `public/mock-assets/f2f33158052b4d898f47826dcd166892.mp4`，不会依赖开发者桌面文件。该视频仅是用户提供的 Mock 示例，不代表当前任务真实生成结果，也不会用于真实 Provider 或真实资产记录。
 
 自动验证开发/生产边界（使用临时端口和专用的不可连接数据库地址，不使用真实数据库）：
 
@@ -114,7 +118,7 @@ Smoke 使用临时端口启动真实 Nest、Vite 和 Chromium，不拦截 API；
 
 2026-09-24 开发/生产边界验证：`npm run typecheck:all`、`npm run lint`、前后端 build 通过；新增开发模式单元与浏览器测试，原有 Mock 生产流程/移动端 Engine 测试 7 项及新增开发页面测试 2 项通过，真实离线/会话测试 7 项通过。`test:smoke:development` 实际启动 `npm run dev`、开发真实后端、生产离线后端与 production preview，验证精确 URL、Enter 重印、离线 503、主动切换演示以及生产构建即使使用 `VITE_API_MODE=mock` 也不能绕过。Smoke 使用独立的不可连接数据库地址和测试凭据，结束后清理自己的进程组。Vite build 仍有主 bundle 超过 500 kB 的体积警告。数据库恢复由自动化替身测试覆盖，本次未启动真实 MySQL/ComfyUI/LLM，也不声称通过真实生成联调。
 
-Docker Compose 提供 `mysql`、`backend`、`frontend`、`proxy` 四个服务，默认只将入口绑定到 `127.0.0.1:8088`。远程访问必须通过 HTTPS/VPN/受控 Tunnel；不要暴露 3000、5173、3306、8188 或 LLM 端口。
+Docker Compose 提供 `mysql`、`backend`、`frontend`、`proxy` 四个服务，默认只将生产入口绑定到 `127.0.0.1:8060`，可通过 `PROD_PORT` 配置宿主机入口端口、通过 `PORT` 配置容器内 Nest 后端端口。远程访问必须通过 HTTPS/VPN/受控 Tunnel；不要暴露应用后端、3306、8188 或 LLM 端口。
 
 详细配置、Windows 命令、ComfyUI/Llama 配置、备份和 HTTPS 说明见 `docs/phase3-running.md`。
 

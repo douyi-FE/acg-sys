@@ -10,6 +10,7 @@ import PageHeader from '../../components/PageHeader.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
 import ProductionTracePanel from '../../components/ProductionTracePanel.vue'
 import TaskReviewPreview from '../../components/TaskReviewPreview.vue'
+import JsonCode from '../../components/JsonCode.vue'
 import { isMockMode } from '../../api/mode'
 import type { Character, TaskAction, VideoShot, VideoTask } from '../../types'
 import { useFieldValidation, required, numberRange } from '../../composables/fieldValidation'
@@ -281,6 +282,15 @@ function pretty(value: string | undefined) {
     return value
   }
 }
+function isJson(value: string | undefined) {
+  if (!value?.trim()) return false
+  try {
+    JSON.parse(value)
+    return true
+  } catch {
+    return false
+  }
+}
 </script>
 
 <template>
@@ -310,7 +320,7 @@ function pretty(value: string | undefined) {
       type="info"
       show-icon
       message="Mock 演示，不是真实视频"
-      description="当前展示的是模拟生产数据。导出为 JSON 制作包，包含脚本、角色、分镜、参数和日志，不提供真实视频播放或下载。"
+      description="当前展示的是模拟生产数据。JSON 制作资料包含脚本、角色、分镜、参数和日志；审核通过后可下载项目内 Mock 示例视频，该视频不是当前任务生成结果。"
     />
     <template v-if="task">
       <section
@@ -504,15 +514,18 @@ function pretty(value: string | undefined) {
           <div class="io-grid">
             <div>
               <h3>Input / 输入</h3>
-              <pre>{{ pretty(stage.input) }}</pre>
+              <JsonCode v-if="isJson(stage.input)" :value="stage.input" />
+              <pre v-else>{{ pretty(stage.input) }}</pre>
             </div>
             <div>
               <h3>Output / 输出</h3>
-              <pre>{{ pretty(stage.output) }}</pre>
+              <JsonCode v-if="isJson(stage.output)" :value="stage.output" />
+              <pre v-else>{{ pretty(stage.output) }}</pre>
             </div>
           </div>
           <h3>Prompt / 提示词</h3>
-          <pre>{{ stage.prompt || '暂无提示词' }}</pre>
+          <JsonCode v-if="isJson(stage.prompt)" :value="stage.prompt" />
+          <pre v-else>{{ stage.prompt || '暂无提示词' }}</pre>
         </template>
         <div
           v-else
@@ -1026,7 +1039,8 @@ function pretty(value: string | undefined) {
 .io-grid > div {
   min-width: 0;
 }
-pre {
+.detail > .stage-content pre:not(.json-code),
+.detail > .editor pre:not(.json-code) {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -1039,6 +1053,9 @@ pre {
     monospace;
   max-height: 380px;
   overflow: auto;
+}
+.detail :deep(.json-code) {
+  max-height: 380px;
 }
 .editor-head {
   margin-bottom: 16px;

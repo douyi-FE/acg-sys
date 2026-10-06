@@ -243,13 +243,16 @@ export function createMockApi(options: Options = {}) {
     cancelComfy: (id: string): ComfyUIExecution => transaction((draft) => engine.cancel(draft, id)),
     loadDemo: (): VideoTask[] =>
       transaction((draft) => {
-        const tasks = createDemoSeed(draft).tasks
+        const demo = createDemoSeed(draft)
+        const tasks = demo.tasks
         for (const task of tasks) {
           task.createdAt = task.updatedAt = new Date(clock()).toISOString()
           task.estimated = ((task.stages.length - 1) * draft.settings.stageDuration) / 1000
           log(task, '用户显式加载 Mock 示例；不覆盖已有任务')
         }
         draft.tasks.unshift(...tasks)
+        draft.articles.unshift(...demo.articles)
+        draft.assets.unshift(...demo.assets)
         return tasks
       }),
     createVideo: (request: VideoRequest): VideoTask =>

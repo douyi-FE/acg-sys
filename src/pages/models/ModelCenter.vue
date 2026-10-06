@@ -36,7 +36,7 @@ async function toggle(model: AIModel) {
 </script>
 
 <template>
-  <div class="page-stack">
+  <div class="page-stack model-center">
     <PageHeader
       title="模型中心"
       description="按能力管理模型配置，观察模拟调用与可用状态。"
@@ -65,7 +65,11 @@ async function toggle(model: AIModel) {
         <span class="muted">模拟总调用</span><strong>{{ calls.toLocaleString() }}</strong>
       </section>
     </div>
-    <section class="panel">
+    <section class="panel model-directory">
+      <div class="directory-heading">
+        <div><span class="section-kicker">MODEL DIRECTORY</span><h2>模型目录</h2><p class="muted">按能力筛选并控制当前工作区可用模型。</p></div>
+        <span class="directory-count">{{ models.length }} 个结果</span>
+      </div>
       <div class="filters">
         <a-input
           v-model:value="query"
@@ -211,7 +215,13 @@ small {
 .panel {
   min-width: 0;
 }
+.directory-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:22px; }
+.directory-heading h2 { margin:6px 0 4px; color:#29263f; font-size:20px; }.directory-heading p { margin:0; font-size:12px; }
+.section-kicker { color:#7770d8; font-size:10px; font-weight:750; letter-spacing:.16em; }.directory-count { color:#77738d; font-size:12px; white-space:nowrap; }
+.model { background:linear-gradient(135deg,#fff,#fbfaff); box-shadow:0 4px 14px rgba(57,45,120,.04); transition:transform .2s, box-shadow .2s, border-color .2s; }.model:hover { transform:translateY(-2px); border-color:#c9c3f0; box-shadow:0 12px 26px rgba(57,45,120,.09); }
+.model .section-head { align-items:center; }.model .section-head :deep(.ant-switch-checked) { background:#635bdb; }
 @media (max-width: 600px) {
+  .directory-heading { flex-direction:column; gap:8px; }
   .filters {
     grid-template-columns: 1fr;
   }

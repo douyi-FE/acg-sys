@@ -51,7 +51,7 @@ router.beforeEach(async (to) => {
   if (to.path === '/login' || to.path === '/access-denied' || to.path === '/public' || to.path === '/unavailable') return true
   try { if (!auth.ready) await auth.load() }
   catch { return '/unavailable' }
-  if (!isMockMode && !auth.session) return to.path === '/' ? '/public' : '/login'
+  if (!isMockMode && !auth.session) return '/login'
   if (auth.mustChangePassword && to.path !== '/change-password') return '/change-password'
   if (to.path === '/change-password' && !auth.session?.user) return '/login'
   const permission = routePermission(to.path)

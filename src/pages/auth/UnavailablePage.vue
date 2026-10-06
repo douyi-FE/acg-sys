@@ -8,19 +8,36 @@ const router = useRouter()
 const retrying = ref(false)
 const backend = ref('检查中')
 const database = ref('未知')
+const reason = ref('')
+const reasonCode = ref('')
 const preview = ref(false)
 const selected = ref('工作台')
 const pages = ['工作台', '视频工厂', '任务中心', '热点工厂', '文章库', '发布中心', '内容资产', '工作流', 'ComfyUI', '模型中心', '统计分析', '系统设置', '用户与权限']
 async function health() {
   try {
     const response = await fetch('/api/health', { signal: AbortSignal.timeout(5000) })
-    const payload = await response.json()
+    const raw = await response.text()
+    if (!raw.trim()) {
+      throw new Error(`后端返回空响应（HTTP ${response.status}），请确认后端已启动并检查 8060 → 8061 代理配置。`)
+    }
+    let payload
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      throw new Error(`后端返回的不是有效 JSON（HTTP ${response.status}），可能是代理错误页或后端启动异常。`)
+    }
     if (payload?.data?.backend !== 'up') throw new Error('Unavailable')
     backend.value = '可连接'
     database.value = payload.data.database === 'up' ? '已就绪' : '未就绪 (503)'
-  } catch {
+    reasonCode.value = payload.data.reason?.code ?? ''
+    reason.value = payload.data.reason?.message ?? (
+      payload.data.database === 'down' ? '数据库未就绪，请检查服务端数据库配置。' : ''
+    )
+  } catch (error) {
     backend.value = '不可连接'
     database.value = '未知（后端不可连接）'
+    reasonCode.value = 'BACKEND_UNREACHABLE'
+    reason.value = error instanceof Error ? error.message : '无法连接后端健康检查接口，请确认 NestJS 服务已启动。'
   }
 }
 onMounted(health)
@@ -51,6 +68,13 @@ async function retry() {
         <div><span class="status-dot readonly" />当前页面：离线只读</div>
       </div>
       <p v-if="auth.error" class="error-copy">{{ auth.error }}</p>
+      <section v-if="reason" class="diagnostic" aria-label="故障原因">
+        <strong>{{ reasonCode || 'SERVICE_UNAVAILABLE' }}</strong>
+        <p>{{ reason }}</p>
+        <p v-if="reasonCode === 'DATABASE_URL_MISSING'">
+          请在服务端配置 DATABASE_URL 后重启后端；数据库连接串不应在浏览器页面中填写或保存。
+        </p>
+      </section>
       <div class="actions">
         <a-button type="primary" :loading="retrying" @click="retry">重试连接</a-button>
         <a-button @click="preview = !preview">{{ preview ? '关闭预览' : '选择浏览离线布局预览' }}</a-button>
@@ -81,6 +105,9 @@ h1 { margin: 0 0 12px; color: #171925; font-size: 32px; }
 .status-dot { display: inline-block; width: 9px; height: 9px; margin-right: 10px; border-radius: 50%; }
 .backend { background: #35a56a; } .database { background: #e49a36; } .readonly { background: #7d8498; }
 .error-copy { color: #b42318; }
+.diagnostic { margin: 18px 0; padding: 14px 16px; border: 1px solid #f0c7c2; border-radius: 10px; background: #fff7f5; color: #7a271a; }
+.diagnostic strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.diagnostic p { margin: 8px 0 0; line-height: 1.6; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .footnote { margin: 20px 0 0; font-size: 12px; }
 .preview { width: min(1100px, 100%); display: flex; gap: 32px; margin-top: 24px; padding: 24px; background: white; border-radius: 12px; }

@@ -3,12 +3,17 @@ import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { createServer as createPortCheck } from 'node:net'
 import { fileURLToPath } from 'node:url'
-import { createServer } from 'vite'
+import { createServer, loadEnv } from 'vite'
 import { networkInterfaces } from 'node:os'
 import { isIP } from 'node:net'
 import { addressLines, cleanLog, createTerminal } from './dev-terminal.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
+// Shell variables win over local development configuration.
+const localEnv = loadEnv('development', root, '')
+for (const key of ['DEV_WEB_PORT', 'DEV_BACKEND_PORT', 'DEV_HOST', 'API_PROXY_TARGET', 'DEV_PUBLIC_URL']) {
+  if (process.env[key] === undefined && localEnv[key] !== undefined) process.env[key] = localEnv[key]
+}
 const args = process.argv.slice(2)
 const modeIndex = args.indexOf('--mode')
 const mode = modeIndex < 0 ? 'demo' : args[modeIndex + 1]
@@ -25,10 +30,12 @@ function port(value, fallback) {
   if (!Number.isInteger(result) || result < 0 || result > 65535) throw new Error('Ports must be integers from 0 to 65535.')
   return result
 }
-const webPort = port(process.env.DEV_WEB_PORT, 5173)
+// Development has two processes, so the browser port and backend port are
+// intentionally separate and independently configurable.
+const webPort = port(process.env.DEV_WEB_PORT, 8060)
 const host = process.env.DEV_HOST || '127.0.0.1'
 if (!isIP(host)) throw new Error('DEV_HOST must be an explicit IP address (default 127.0.0.1).')
-const backendPort = port(process.env.DEV_BACKEND_PORT, 3000)
+const backendPort = port(process.env.DEV_BACKEND_PORT, 8061)
 if (!backendPort) throw new Error('DEV_BACKEND_PORT must be nonzero; choose an unused port.')
 const target = process.env.API_PROXY_TARGET || `http://127.0.0.1:${backendPort}`
 const externalBackend = !!process.env.API_PROXY_TARGET
@@ -39,6 +46,10 @@ if (!['http:', 'https:'].includes(targetUrl.protocol) || targetUrl.username || t
 process.env.NODE_ENV = 'development'
 process.env.VITE_DEV_MODE = mode
 process.env.API_PROXY_TARGET = target
+// Vite closes its dev server when stdin reaches EOF unless CI is set. The
+// launcher must also work when started by IDEs, task runners, or background
+// processes whose stdin is not a TTY.
+if (!process.stdin.isTTY && process.env.CI === undefined) process.env.CI = 'true'
 let web
 let child
 let input

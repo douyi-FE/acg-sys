@@ -26,8 +26,8 @@ services:
     environment:
       DATABASE_URL: mysql://${MYSQL_USER:-factory}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-content_factory}
       HOST: 0.0.0.0
-      PORT: 3000
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://127.0.0.1:8088}
+      PORT: ${PORT:-8060}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://127.0.0.1:${PROD_PORT:-8060}}
       NODE_ENV: production
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       STORAGE_PATH: /app/storage
@@ -35,18 +35,20 @@ services:
       mysql:
         condition: service_healthy
     expose:
-      - "3000"
+      - "${PORT:-8060}"
     volumes:
       - asset-data:/app/storage
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 30s
       retries: 3
   frontend:
+    environment:
+      BACKEND_PORT: ${PORT:-8060}
     build:
       context: .
       dockerfile: deploy/Dockerfile.web
@@ -63,7 +65,7 @@ services:
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
-      - "127.0.0.1:8088:80"
+      - "127.0.0.1:${PROD_PORT:-8060}:80"
 volumes:
   mysql-data:
   asset-data:
